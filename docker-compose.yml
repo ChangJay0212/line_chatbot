@@ -1,0 +1,44 @@
+version: '3.8'  #docker compose 版本
+#---------------docker內部網路設定-----------------  
+networks:
+  core_network: #docker內部網路名稱
+    driver: bridge # 支援所有service內部通訊(外部只能透過開放的port)
+    
+#---------------service設定-----------------    
+services: 
+  database: # postgre設定
+    image: postgres:17beta3-alpine3.20 #postgre使用哪個docker image
+    container_name: database #設定container名稱
+    environment: #會使用到的環境參數
+      POSTGRES_USER: user   #帳號
+      POSTGRES_PASSWORD: 1234  #密碼
+      POSTGRES_DB: conversation  #database name
+    ports:
+      - 5432:5432 #對外連線使用5432
+    networks:
+      - core_network #和docker內部網路連結
+    volumes:  #和docker內部和host端的資料夾印射
+      - C:\Users\User\Documents\line_chatbot\postgres_data:/var/lib/postgresql/data  
+    restart: always  #永遠會重啟
+    
+  main_service: #主要服務的docker
+    image: pytorch/pytorch:2.4.1-cuda12.4-cudnn9-devel #服務使用哪個docker image
+    container_name: core #設定container名稱
+    deploy: 
+      resources: #host端硬體資源設定
+        reservations: 
+          devices: #gpu設定
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    volumes: #和docker內部和host端的資料夾印射
+      - C:\Users\User\Documents\line_chatbot:/workspace
+    networks:
+      - core_network  #和docker內部網路連結
+    ports:
+      - 8001:8001 #對外連線使用8001
+    #---------可使用交互介面------------
+    stdin_open: true
+    tty: true 
+
+
