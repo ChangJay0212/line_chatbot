@@ -3,7 +3,12 @@ FROM pytorch/pytorch:2.4.1-cuda12.4-cudnn9-devel
 WORKDIR /workspace
 
 COPY requirements.txt .
+RUN apt-get update && \
+    #這是 PostgreSQL 的客戶端開發庫。它包含了與 PostgreSQL 伺服器進行交互所需的頭文件和連接庫，通常用於編譯和開發需要連接 PostgreSQL 資料庫的程式（例如 psycopg2 Python 套件）。
+    apt-get install -y libpq-dev gcc && \ 
+    pip install --no-cache-dir -r requirements.txt && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
 
-RUN pip install --no-cache-dir -r requirements.txt
 
 
