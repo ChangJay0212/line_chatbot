@@ -1,8 +1,12 @@
 #api
 fastapi==0.114.0
+uvicorn==0.30.6
 
 #line 
 line-bot-sdk==2.3.0
+
+#postgre
+psycopg2==2.9.9
 
 #llm
 transformers==4.44.2
