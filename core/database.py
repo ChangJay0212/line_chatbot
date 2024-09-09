@@ -34,7 +34,7 @@ class PostgreSQL():
         CREATE TABLE IF NOT EXISTS conversation_his (
             id SERIAL PRIMARY KEY,
             "user" TEXT,
-            time TIME,
+            time TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
             content TEXT
         );
         """
@@ -51,9 +51,17 @@ class PostgreSQL():
             values (tuple): A tuple containing the values to be inserted into the specified columns.
 
         Example:
-            db.add("users", "name, age", ("John", 30))
+            db.add("conversation_his", '"user","content"', ("Jay", "黑琵測試"))
         """
-        query = f"INSERT INTO {table} ({columns}) VALUES (%s, %s)"
+        if values[1] is None:
+            # 移除 "time" 列，並不插入 time 的值，讓數據庫使用默認值
+            columns = '"user", "content"'
+            query = f"INSERT INTO {table} ({columns}) VALUES (%s, %s)"
+            self.cur.execute(query, (values[0], values[2]))  # 插入的值不包括 time
+        else:
+            # 如果 time 有值，則正常插入
+            query = f"INSERT INTO {table} ({columns}) VALUES (%s, %s, %s)"
+            self.cur.execute(query, values)  # 正常插入所有值
         self.cur.execute(query, values)
         self.conn.commit()
 
@@ -70,27 +78,48 @@ class PostgreSQL():
             list: A list of tuples containing the retrieved records.
 
         Example:
-            results = db.get("users", "name, age", "age > 30")
+            results = db.get("conversation_his", '"id","user","time","content"')
         """
         query = f"SELECT {columns} FROM {table}"
         if condition:
             query += f" WHERE {condition}"
         self.cur.execute(query)
-        return self.cur.fetchall()
+        
+        temp_results = self.cur.fetchall()
+        result = []
+        if temp_results:
+            for info in temp_results:
+                id, user, time, content = info
+                str_time = f"{time.year}/{time.month}/{time.day}"
+                result.append({'id':id,
+                                'user':user,
+                                'time':str_time,
+                                'content':content})
+        return result
+    
 
-    def delete(self, table: str, condition: str) -> None:
+    def delete(self, table: str, ids: list) -> None:
         """
-        Deletes records from the specified table based on a condition.
+        Deletes records from the specified table based on a list of ids.
 
         Args:
             table (str): The name of the table from which to delete records.
-            condition (str): The condition that specifies which records to delete.
+            ids (list): A list of ids that specifies which records to delete. If only one id is provided, the query will handle it.
 
         Example:
-            db.delete("users", "age < 20")
+            db.delete("conversation_his", [1])  # 刪除一條記錄
+            db.delete("conversation_his", [1, 2, 3])  # 刪除多條記錄
         """
-        query = f"DELETE FROM {table} WHERE {condition}"
-        self.cur.execute(query)
+        if len(ids) == 1:
+            # 如果只有一個 id，使用普通的等號進行刪除
+            query = f"DELETE FROM {table} WHERE id = %s"
+            self.cur.execute(query, (ids[0],))
+        else:
+            # 如果有多個 id，使用 IN 語句
+            query = f"DELETE FROM {table} WHERE id IN %s"
+            self.cur.execute(query, (tuple(ids),))
+
+        # 提交更改
         self.conn.commit()
 
     def close(self) -> None:
