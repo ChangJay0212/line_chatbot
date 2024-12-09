@@ -56,4 +56,4 @@ build/
 
 # 忽略postgre檔案
 *postgre*
-
+*models

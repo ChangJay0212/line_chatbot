@@ -7,22 +7,29 @@ networks:
 #---------------service設定-----------------    
 services: 
   database: # postgre設定
+    env_file:
+      - .env
     image: postgres:17beta3-alpine3.20 #postgre使用哪個docker image
     container_name: database #設定container名稱
     environment: #會使用到的環境參數
-      POSTGRES_USER: user   #帳號
-      POSTGRES_PASSWORD: 1234  #密碼
-      POSTGRES_DB: conversation  #database name
+      POSTGRES_USER: ${POSTGRES_USER}   #帳號
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}  #密碼
+      POSTGRES_DB: ${POSTGRES_DB}  #database name
     ports:
-      - 5432:5432 #對外連線使用5432
+      - "${DBPORT}:${DBPORT}" #對外連線使用5432
     networks:
       - core_network #和docker內部網路連結
     volumes:  #和docker內部和host端的資料夾印射
-      - C:\Users\User\Documents\line_chatbot\postgres_data:/var/lib/postgresql/data  
+      - ${PATH_TO_PJOJECT}\line_chatbot\postgres_data:/var/lib/postgresql/data  
     restart: always  #永遠會重啟
     
   main_service: #主要服務的docker
-    image: pytorch/pytorch:2.4.1-cuda12.4-cudnn9-devel #服務使用哪個docker image
+    env_file:
+      - .env
+    image: lichieh/core:v1.0 
+    build: 
+      context: ./docker
+      dockerfile: ./dockerfile
     container_name: core #設定container名稱
     deploy: 
       resources: #host端硬體資源設定
@@ -32,7 +39,7 @@ services:
               count: all
               capabilities: [gpu]
     volumes: #和docker內部和host端的資料夾印射
-      - C:\Users\User\Documents\line_chatbot:/workspace
+      - ${PATH_TO_PJOJECT}\line_chatbot:/workspace
     networks:
       - core_network  #和docker內部網路連結
     # ports:
@@ -44,39 +51,66 @@ services:
     tty: true 
 
   nginx_service:
+    env_file:
+      - .env
     image: nginx:latest
     container_name: nginx_proxy
     ports:
-      - 80:80
+      - "${NGINX_PORT}:${NGINX_PORT}"
     volumes:
-      - C:\Users\User\Documents\line_chatbot\network\nginx.conf:/etc/nginx/nginx.conf
+      - ${PATH_TO_PJOJECT}\line_chatbot\network\nginx.conf:/etc/nginx/nginx.conf
     networks:
       - core_network
     depends_on:
       - main_service
   
   ngrok:
+    env_file:
+      - .env
     image: wernight/ngrok
     container_name: ngrok
     environment:
-      NGROK_AUTH: 2lmwn0HLP6B34G358aLDMAvaSkA_45JMnvHxTvdxGrxZZ9xoC  # 請在這裡替換為你的 ngrok 授權 token
-      NGROK_PORT: nginx_service:80  # 將 ngrok 對應到 nginx_service 的 80 端口
+      NGROK_AUTH: ${NGROK_AUTH}  # 請在這裡替換為你的 ngrok 授權 token
+      NGROK_PORT: "nginx_service:${NGINX_PORT}"  # 將 ngrok 對應到 nginx_service 的 80 端口
     depends_on:
       - nginx_service
     ports:
-      - 4040:4040
+      - "${NGROK_PORT}:${NGROK_PORT}"
     networks:
       - core_network
+
+  model_server:
+    env_file:
+      - .env
+    image: ollama/ollama:latest
+    container_name: ollama
+    deploy: 
+      resources: #host端硬體資源設定
+        reservations: 
+          devices: #gpu設定
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    environment:
+      OLLAMA_MAX_LOADED_MODELS: 1
+    volumes:
+      - ${PATH_TO_PJOJECT}\line_chatbot\models\ollama:/root/.ollama
+      - ${PATH_TO_PJOJECT}\line_chatbot\models\gguf:/home
+    ports:
+      - "${OLLAMA_PORT}:${OLLAMA_PORT}"
+    networks:
+      - core_network
+    restart: always  #永遠會重啟
 
   # -----如果你有自己的網域名稱 可以使用 certbot 去做ssl----
   # certbot:
   #   image: certbot/certbot
   #   container_name: certbot
   #   volumes:
-  #     - C:\Users\User\Documents\line_chatbot\etc\letsencrypt:/etc/letsencrypt  # 掛載憑證目錄到 certbot 容器
-  #     - C:\Users\User\Documents\line_chatbot\var\lib\letsencrypt:/var/lib/letsencrypt
-  #     - C:\Users\User\Documents\line_chatbot\var\log\letsencrypt:/var/log/letsencrypt
-  #     - C:\Users\User\Documents\line_chatbot\var\www\certbot:/var/www/certbot
+  #     - ${PATH_TO_PJOJECT}\line_chatbot\etc\letsencrypt:/etc/letsencrypt  # 掛載憑證目錄到 certbot 容器
+  #     - ${PATH_TO_PJOJECT}\line_chatbot\var\lib\letsencrypt:/var/lib/letsencrypt
+  #     - ${PATH_TO_PJOJECT}\line_chatbot\var\log\letsencrypt:/var/log/letsencrypt
+  #     - ${PATH_TO_PJOJECT}\line_chatbot\var\www\certbot:/var/www/certbot
   #   networks:
   #     - core_network
   #   entrypoint: /bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $!; done;'

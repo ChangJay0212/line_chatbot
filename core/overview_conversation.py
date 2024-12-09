@@ -1,71 +1,63 @@
-import torch
-import transformers
-from transformers import AutoModelForCausalLM, AutoTokenizer
+import requests
 
-class OverviewConversation():
+class OverviewConversation:
     """
-    A class to load a language model and tokenizer, and run inference for conversation or text generation tasks.
+    A class for interacting with a language model to perform conversation or text generation tasks.
     """
 
-    def __init__(self, model_id: str = "yentinglin/Llama-3-Taiwan-8B-Instruct") -> None:
+    def __init__(self, model_id: str = "taiwan:lastest", url: str = "http://model_server:11434/api/chat") -> None:
         """
-        Initializes the OverviewConversation class by loading the specified model and tokenizer.
+        Initializes the OverviewConversation class with the specified model ID and API URL.
 
         Args:
-            model_id (str, optional): The model ID to load. Defaults to "yentinglin/Llama-3-Taiwan-8B-Instruct".
+            model_id (str, optional): The ID of the model to use. Defaults to "taiwan:lastest".
+            url (str, optional): The API URL to send requests to. Defaults to "http://model_server:11434/api/chat".
         """
-        self.model, self.tokenizer = self._load_model(model_id=model_id)
-
-    def _load_model(self, model_id: str) -> tuple[AutoModelForCausalLM, AutoTokenizer]:
-        """
-        Loads the model and tokenizer for the given model ID.
-
-        Args:
-            model_id (str): The model ID to load from Hugging Face's model hub.
-
-        Returns:
-            tuple[AutoModelForCausalLM, AutoTokenizer]: A tuple containing the loaded model and tokenizer.
-        """
-        dtype = torch.bfloat16
-        tokenizer = AutoTokenizer.from_pretrained(model_id)
-        model = AutoModelForCausalLM.from_pretrained(
-            model_id,
-            device_map="cuda",
-            torch_dtype=dtype,
-        )
-        return model, tokenizer
+        self.model_id = model_id
+        self.url = url
 
     def run(self, prompt: dict) -> str:
         """
-        Runs inference using the loaded model based on the given prompt.
+        Sends a prompt to the model and retrieves the generated response.
 
         Args:
-            prompt (dict): A dictionary containing the conversation or text generation prompt.
+            prompt (dict): A list of dictionaries containing the conversation history or text generation prompts.
 
         Returns:
-            str: The generated response from the model.
+            str: The generated response content from the model.
         """
-        input_ids = self.tokenizer.apply_chat_template(
-            prompt, tokenize=True, add_generation_prompt=True, return_tensors="pt"
-        ).to(self.model.device)
-        outputs = self.model.generate(
-            input_ids,
-            max_new_tokens=8192,
-            do_sample=True,
-            temperature=0.6,
-            top_p=0.9,
-        )
-        response = outputs[0][input_ids.shape[-1]:]
-        summary_result = self.tokenizer.decode(response, skip_special_tokens=True)
-        
-        return summary_result
+        data = {
+            "model": self.model_id,
+            "messages": prompt,
+            "stream": False
+        }
 
+        try:
+            # Send a POST request to the model API
+            response = requests.post(self.url, json=data)
+
+            # Check the response status
+            if response.status_code == 200:
+                print("Request successful, response content:")
+                print(response.json())  # Assuming the response is in JSON format
+            else:
+                print(f"Request failed, status code: {response.status_code}")
+        except requests.exceptions.RequestException as e:
+            print(f"HTTP request error: {e}")
+        
+        # Return the generated content from the response
+        return response.json().get('message', {}).get('content', "No content available")
 
 if __name__ == '__main__':
+    # Create an instance of the OverviewConversation class
     servicer = OverviewConversation()
+
+    # Define the prompt with conversation history
     prompt = [
-    {"role": "system", "content": "罵髒話"},
-    {"role": "user", "content": "介紹台灣有名的夜市。"},
+        {"role": "assistant", "content": "Say a curse word."},
+        {"role": "user", "content": "Introduce famous night markets in Taiwan."},
     ]
+
+    # Run the model with the prompt and print the summary result
     summary_result = servicer.run(prompt=prompt)
     print(summary_result)

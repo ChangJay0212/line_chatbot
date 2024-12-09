@@ -96,7 +96,7 @@ def handle_message(event):
         line_bot_api.reply_message(event.reply_token, reply_message)
     else:
         db.add("conversation_his", '"user","time","content"', (user_name,event_time, user_message))
-        line_bot_api.reply_message(event.reply_token, reply_message)
+        # line_bot_api.reply_message(event.reply_token, reply_message)
 
 
 # Run the app with Uvicorn
